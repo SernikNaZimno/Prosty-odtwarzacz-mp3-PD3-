@@ -30,7 +30,7 @@ class RetroPlayerWindow(QMainWindow):
         self.player = AudioPlayer()
         
         # Inicjalizacja playlisty - szukaj piosenek w folderze projektu
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.playlist = PlaylistManager(app_dir)
         
         # Tryby odtwarzania

@@ -1,6 +1,6 @@
 import os
 from mutagen.id3 import ID3
-from mutagen.mp3 import MPEGInfo
+from mutagen.mp3 import MP3
 from pathlib import Path
 
 class SongMetadata:
@@ -16,13 +16,12 @@ class SongMetadata:
     def load_metadata(self):
         """Wczytaj metadane z pliku MP3"""
         try:
-            # Parsuj informacje audio
-            audio = MPEGInfo(self.file_path)
-            self.duration = int(audio.length)
-            self.bitrate = audio.bitrate // 1000 if audio.bitrate else 128  # konwersja do kbps
-            self.sample_rate = audio.sample_rate
+            audio = MP3(self.file_path)
             
-            # Parsuj ID3 tags
+            self.duration = int(audio.info.length)
+            self.bitrate = audio.info.bitrate // 1000 if audio.info.bitrate else 128
+            self.sample_rate = audio.info.sample_rate
+            
             try:
                 tags = ID3(self.file_path)
                 if "TIT2" in tags:  # Title
@@ -30,13 +29,13 @@ class SongMetadata:
                 if "TPE1" in tags:  # Artist
                     self.artist = str(tags["TPE1"])
             except:
-                # Jeśli brak tagów, użyj nazwy pliku
                 filename = Path(self.file_path).stem
                 self.title = filename
                 
         except Exception as e:
             print(f"Błąd wczytywania metadanych z {self.file_path}: {str(e)}")
-    
+            
+            
     def get_duration_string(self) -> str:
         """Zwróć czas w formacie MM:SS"""
         minutes = self.duration // 60
