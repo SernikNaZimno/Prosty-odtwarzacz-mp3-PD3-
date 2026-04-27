@@ -32,7 +32,6 @@ class RetroPlayerWindow(QMainWindow):
         songs_dir = os.path.join(app_dir, "songs")
         self.playlist = PlaylistManager(songs_dir)
         
-        # --- NOWOŚĆ: Historia odtwarzania dla trybu Shuffle ---
         self.play_history = [] 
         
         self.shuffle_mode = False
@@ -73,7 +72,7 @@ class RetroPlayerWindow(QMainWindow):
             self.display_board.update_bitrate(song.bitrate)
             self.display_board.update_sample_rate(song.sample_rate)
             self.display_board.update_time(0, song.duration * 1000)
-    
+            
     def on_play(self):
         if self.playlist.get_current_song() is None: return
         if self.player.state == PlayerState.STOPPED:
@@ -92,11 +91,9 @@ class RetroPlayerWindow(QMainWindow):
         if self.playlist.get_songs_count() == 0:
             return
             
-        # Zapisujemy obecny indeks do historii przed zmianą utworu
         current_idx = self.playlist.get_current_index()
         self.play_history.append(current_idx)
         
-        # Ograniczamy historię np. do 100 elementów
         if len(self.play_history) > 100:
             self.play_history.pop(0)
 
@@ -118,12 +115,10 @@ class RetroPlayerWindow(QMainWindow):
         if self.playlist.get_songs_count() == 0:
             return
             
-        # Jeśli jesteśmy w trybie shuffle i mamy coś w historii
         if self.shuffle_mode and self.play_history:
-            prev_index = self.play_history.pop() # Wyciągamy ostatni indeks z historii
+            prev_index = self.play_history.pop()
             self.playlist.get_song_at(prev_index)
         else:
-            # W trybie normalnym idziemy po prostu do poprzedniego utworu na liście
             self.playlist.prev_song()
         
         was_playing = self.player.state == PlayerState.PLAYING
@@ -132,19 +127,37 @@ class RetroPlayerWindow(QMainWindow):
         if was_playing: self.player.play()
     
     def on_shuffle_toggle(self):
-        self.shuffle_mode = self.control_bar.btn_shuffle.isChecked()
+        # Ręcznie odwracamy stan zmiennej logicznej
+        self.shuffle_mode = not self.shuffle_mode
+        
         if self.shuffle_mode:
+            # Ustawiamy styl włączonego Shuffle
             self.control_bar.btn_shuffle.setStyleSheet("font-size: 9px; color: #00FF00; border: 1px solid #00FF00;")
+            
+            # Wzajemne wykluczanie - jeśli Loop jest włączony, wyłącz go
+            if self.loop_single:
+                self.loop_single = False
+                self.control_bar.btn_loop.setStyleSheet("") # Resetujemy styl Loop
         else:
-            # Czyścimy historię przy wyłączeniu shuffle, by nie "pamiętał" skoków losowych
+            # Czyszczenie historii i resetowanie stylu Shuffle
             self.play_history.clear()
             self.control_bar.btn_shuffle.setStyleSheet("font-size: 9px;")
     
     def on_loop_toggle(self):
-        self.loop_single = self.control_bar.btn_loop.isChecked()
+        # Ręcznie odwracamy stan zmiennej logicznej
+        self.loop_single = not self.loop_single
+        
         if self.loop_single:
+            # Ustawiamy styl włączonego Loop (R)
             self.control_bar.btn_loop.setStyleSheet("color: #00FF00; border: 1px solid #00FF00;")
+            
+            # Wzajemne wykluczanie - jeśli Shuffle jest włączone, wyłącz je
+            if self.shuffle_mode:
+                self.shuffle_mode = False
+                self.play_history.clear()
+                self.control_bar.btn_shuffle.setStyleSheet("font-size: 9px;") # Resetujemy styl Shuffle
         else:
+            # Resetujemy styl Loop
             self.control_bar.btn_loop.setStyleSheet("")
     
     def on_volume_changed(self, value):
