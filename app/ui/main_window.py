@@ -26,24 +26,22 @@ class RetroPlayerWindow(QMainWindow):
         self.main_layout.addWidget(self.display_board)
         self.main_layout.addWidget(self.control_bar)
         
-        # Inicjalizacja odtwarzacza
         self.player = AudioPlayer()
         
-        # Inicjalizacja playlisty - szukaj piosenek w folderze projektu
         app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.playlist = PlaylistManager(app_dir)
+        songs_dir = os.path.join(app_dir, "songs")
+        self.playlist = PlaylistManager(songs_dir)
         
-        # Tryby odtwarzania
+        # --- NOWOŚĆ: Historia odtwarzania dla trybu Shuffle ---
+        self.play_history = [] 
+        
         self.shuffle_mode = False
-        self.loop_mode = False
-        self.loop_single = False  # True = loop jednej piosenki, False = loop playlisty
+        self.loop_single = False
         
-        # Timer do aktualizacji UI
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_player_display)
-        self.update_timer.start(100)  # Aktualizuj co 100ms
+        self.update_timer.start(100)
         
-        # Połączenia sygnałów
         self.control_bar.btn_play.clicked.connect(self.on_play)
         self.control_bar.btn_pause.clicked.connect(self.on_pause)
         self.control_bar.btn_stop.clicked.connect(self.on_stop)
@@ -52,23 +50,19 @@ class RetroPlayerWindow(QMainWindow):
         self.control_bar.btn_shuffle.clicked.connect(self.on_shuffle_toggle)
         self.control_bar.btn_loop.clicked.connect(self.on_loop_toggle)
         
-        # Volume slider
         self.display_board.volume_slider.valueChanged.connect(self.on_volume_changed)
         self.display_board.volume_slider.setValue(50)
         self.on_volume_changed(50)
         
-        # Połączenie sygnałów z odtwarzacza
         self.player.state_changed.connect(self.on_player_state_changed)
         self.player.error.connect(self.on_player_error)
         
-        # Wczytaj pierwszą piosenkę
         if self.playlist.get_songs_count() > 0:
             self.load_current_song()
         else:
             self.display_board.song_value.setText("00  -- NO SONGS --")
     
     def load_current_song(self):
-        """Wczytaj bieżącą piosenkę"""
         song = self.playlist.get_current_song()
         if song:
             self.player.load(song.file_path)
@@ -81,32 +75,35 @@ class RetroPlayerWindow(QMainWindow):
             self.display_board.update_time(0, song.duration * 1000)
     
     def on_play(self):
-        """Obsługa przycisku play"""
-        if self.playlist.get_current_song() is None:
-            return
-        
+        if self.playlist.get_current_song() is None: return
         if self.player.state == PlayerState.STOPPED:
             self.load_current_song()
-        
         self.player.play()
     
     def on_pause(self):
-        """Obsługa przycisku pause"""
         self.player.pause()
     
     def on_stop(self):
-        """Obsługa przycisku stop"""
         self.player.stop()
         self.display_board.update_time(0, 0)
     
     def on_next(self):
-        """Obsługa przycisku next"""
+        """Obsługa przycisku next - zapisuje historię w trybie shuffle"""
         if self.playlist.get_songs_count() == 0:
             return
             
-        if self.shuffle_mode:
-            # Losowa następna piosenka
-            new_index = random.randint(0, self.playlist.get_songs_count() - 1)
+        # Zapisujemy obecny indeks do historii przed zmianą utworu
+        current_idx = self.playlist.get_current_index()
+        self.play_history.append(current_idx)
+        
+        # Ograniczamy historię np. do 100 elementów
+        if len(self.play_history) > 100:
+            self.play_history.pop(0)
+
+        if self.shuffle_mode and self.playlist.get_songs_count() > 1:
+            new_index = current_idx
+            while new_index == current_idx:
+                new_index = random.randint(0, self.playlist.get_songs_count() - 1)
             self.playlist.get_song_at(new_index)
         else:
             self.playlist.next_song()
@@ -114,64 +111,64 @@ class RetroPlayerWindow(QMainWindow):
         was_playing = self.player.state == PlayerState.PLAYING
         self.player.stop()
         self.load_current_song()
-        
-        if was_playing:
-            self.player.play()
+        if was_playing: self.player.play()
     
     def on_prev(self):
-        """Obsługa przycisku previous"""
+        """Obsługa przycisku prev - korzysta z historii w trybie shuffle"""
         if self.playlist.get_songs_count() == 0:
             return
             
-        self.playlist.prev_song()
+        # Jeśli jesteśmy w trybie shuffle i mamy coś w historii
+        if self.shuffle_mode and self.play_history:
+            prev_index = self.play_history.pop() # Wyciągamy ostatni indeks z historii
+            self.playlist.get_song_at(prev_index)
+        else:
+            # W trybie normalnym idziemy po prostu do poprzedniego utworu na liście
+            self.playlist.prev_song()
         
         was_playing = self.player.state == PlayerState.PLAYING
         self.player.stop()
         self.load_current_song()
-        
-        if was_playing:
-            self.player.play()
+        if was_playing: self.player.play()
     
     def on_shuffle_toggle(self):
-        """Obsługa toggle shuffle"""
         self.shuffle_mode = self.control_bar.btn_shuffle.isChecked()
+        if self.shuffle_mode:
+            self.control_bar.btn_shuffle.setStyleSheet("font-size: 9px; color: #00FF00; border: 1px solid #00FF00;")
+        else:
+            # Czyścimy historię przy wyłączeniu shuffle, by nie "pamiętał" skoków losowych
+            self.play_history.clear()
+            self.control_bar.btn_shuffle.setStyleSheet("font-size: 9px;")
     
     def on_loop_toggle(self):
-        """Obsługa toggle loop"""
-        if not self.control_bar.btn_loop.isChecked():
-            self.loop_mode = False
-            self.loop_single = False
+        self.loop_single = self.control_bar.btn_loop.isChecked()
+        if self.loop_single:
+            self.control_bar.btn_loop.setStyleSheet("color: #00FF00; border: 1px solid #00FF00;")
         else:
-            self.loop_mode = True
-            self.loop_single = True
+            self.control_bar.btn_loop.setStyleSheet("")
     
     def on_volume_changed(self, value):
-        """Obsługa zmiany głośności"""
-        volume = value / 100.0
-        self.player.set_volume(volume)
+        self.player.set_volume(value / 100.0)
     
     def on_player_state_changed(self, state):
-        """Obsługa zmiany stanu odtwarzacza"""
         pass
     
     def on_player_error(self, error_msg):
-        """Obsługa błędu z odtwarzacza"""
         print(f"Błąd odtwarzacza: {error_msg}")
     
     def update_player_display(self):
-        """Aktualizuj wyświetlanie czasu i sprawdzaj koniec piosenki"""
         if self.player.state == PlayerState.PLAYING:
             current_pos = self.player.get_position()
             song = self.playlist.get_current_song()
             if song:
                 self.display_board.update_time(current_pos, song.duration * 1000)
             
-            # Sprawdzaj czy piosenka się skończyła
             if self.player.is_music_finished():
                 if self.loop_single:
-                    # Loop jednej piosenki
                     self.player.stop()
+                    self.load_current_song()
                     self.player.play()
                 else:
-                    # Przejdź do następnej
                     self.on_next()
+                    if self.player.state != PlayerState.PLAYING:
+                        self.player.play()
